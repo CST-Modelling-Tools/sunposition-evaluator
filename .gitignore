@@ -1,0 +1,149 @@
+# =========================================
+
+# General
+
+# =========================================
+
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# =========================================
+
+# Build directories (CMake / C++)
+
+# =========================================
+
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+
+# CMake generated files
+
+*.dir/
+*.o
+*.obj
+*.so
+*.a
+*.lib
+*.dll
+*.exe
+*.out
+
+# =========================================
+
+# Python
+
+# =========================================
+
+**pycache**/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
+
+venv/
+.venv/
+env/
+ENV/
+
+# =========================================
+
+# Testing / coverage
+
+# =========================================
+
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# =========================================
+
+# Jupyter (if used)
+
+# =========================================
+
+.ipynb_checkpoints/
+
+# =========================================
+
+# IDEs and editors
+
+# =========================================
+
+.vscode/
+.idea/
+*.code-workspace
+
+# =========================================
+
+# OS / system files
+
+# =========================================
+
+*.bak
+
+# =========================================
+
+# Data files (IMPORTANT)
+
+# =========================================
+
+# Large datasets should NOT be versioned
+
+data/
+datasets/
+*.csv
+*.bin
+
+# If you want to keep small example data, whitelist it:
+
+# !data/example.csv
+
+# =========================================
+
+# GOW / evaluator outputs
+
+# =========================================
+
+runs/
+outputs/
+results/
+artifacts/
+logs/
+*.jsonl
+
+# =========================================
+
+# Temporary / scratch
+
+# =========================================
+
+tmp/
+temp/
+
+# =========================================
+
+# Optional: compiled binaries folder
+
+# =========================================
+
+bin/
+lib/
