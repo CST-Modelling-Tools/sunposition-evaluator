@@ -16,8 +16,8 @@ struct MicaBinaryReferenceSample {
     double hours;
     double minutes;
     double seconds;
-    double zenith_angle;  // radians
-    double azimuth;       // radians
+    double zenith_angle;
+    double azimuth;
 };
 
 #endif // MICA_BINARY_DATASET_H

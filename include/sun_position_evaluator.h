@@ -10,19 +10,17 @@
 
 struct ReferenceSample {
     TimePoint time_point;
-    double reference_zenith_angle;  // rad
-    double reference_azimuth;       // rad
+    double reference_zenith;
+    double reference_azimuth;
 };
 
 struct EvaluationMetrics {
     double mean_angular_error;
     double mean_azimuth_error;
     double mean_zenith_error;
-
     double max_angular_error;
     double max_azimuth_error;
     double max_zenith_error;
-
     std::size_t sample_count;
 };
 
@@ -39,25 +37,24 @@ public:
         const SunPositionAlgorithm::ParameterVector& parameters) const;
 
 private:
-    std::vector<ReferenceSample> m_reference_samples;
-    GeoLocation m_location;
-
-    void load_reference_samples_from_binary(
-        const std::string& mica_binary_file_path);
+    void load_reference_samples(const std::string& mica_binary_file_path);
 
     static double compute_azimuth_error(
         double computed_azimuth,
         double reference_azimuth);
 
     static double compute_zenith_error(
-        double computed_zenith_angle,
-        double reference_zenith_angle);
+        double computed_zenith,
+        double reference_zenith);
 
     static double compute_angular_error(
         double computed_azimuth,
-        double computed_zenith_angle,
+        double computed_zenith,
         double reference_azimuth,
-        double reference_zenith_angle);
+        double reference_zenith);
+
+    std::vector<ReferenceSample> m_reference_samples;
+    GeoLocation m_location;
 };
 
 #endif // SUN_POSITION_EVALUATOR_H

@@ -4,14 +4,12 @@
 #include <array>
 #include <numbers>
 
-// Physical and mathematical constants
-constexpr double pi = std::numbers::pi;
-constexpr double twopi = 2.0 * pi;
-constexpr double rad = pi / 180.0;
-constexpr double dEarthMeanRadius = 6371.01;        // km
-constexpr double dAstronomicalUnit = 149597870.7;   // km
+constexpr double kPi = std::numbers::pi;
+constexpr double kTwoPi = 2.0 * kPi;
+constexpr double kRadiansPerDegree = kPi / 180.0;
+constexpr double kEarthMeanRadiusKm = 6371.01;
+constexpr double kAstronomicalUnitKm = 149597870.7;
 
-// Universal time specification
 struct TimePoint {
     int year;
     int month;
@@ -21,38 +19,34 @@ struct TimePoint {
     double seconds;
 };
 
-// Geographic position
 struct GeoLocation {
-    double longitude;   // degrees
-    double latitude;    // degrees
+    double longitude;
+    double latitude;
 };
 
-// Output solar coordinates
 struct SunCoordinates {
-    double zenith_angle;        // rad
-    double azimuth;             // rad, from North to East
-    double declination;         // rad
-    double bounded_hour_angle;  // rad, in [-pi, pi]
+    double zenith_angle;
+    double azimuth;
+    double declination;
+    double bounded_hour_angle;
 };
 
-class SunPositionAlgorithm 
-{
+class SunPositionAlgorithm {
 public:
     using ParameterVector = std::array<double, 15>;
 
     SunPositionAlgorithm();
     explicit SunPositionAlgorithm(const ParameterVector& parameters);
 
-    void operator()(
+    SunCoordinates operator()(
         const TimePoint& time_point,
-        const GeoLocation& location,
-        SunCoordinates* sun_coordinates) const;
+        const GeoLocation& location) const;
 
     const ParameterVector& parameters() const noexcept;
 
     static ParameterVector default_parameters() noexcept;
 
-    private:
+private:
     ParameterVector m_parameters;
 };
 
