@@ -4,9 +4,14 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <limits>
+#include <numbers>
 #include <stdexcept>
+#include <vector>
 
 namespace {
+
+constexpr double RAD_TO_ARCSEC = 180.0 * 3600.0 / std::numbers::pi;
 
 double clamp_to_unit_interval(double value)
 {
@@ -43,49 +48,51 @@ EvaluationMetrics SunPositionEvaluator::evaluate(
 
     SunPositionAlgorithm algorithm(parameters);
 
-    double sum_angular_error = 0.0;
-    double sum_azimuth_error = 0.0;
-    double sum_zenith_error = 0.0;
-    double max_angular_error = 0.0;
-    double max_azimuth_error = 0.0;
-    double max_zenith_error = 0.0;
+    std::vector<double> azimuth_errors_arcsec;
+    std::vector<double> zenith_errors_arcsec;
+    std::vector<double> sun_vector_errors_arcsec;
+
+    azimuth_errors_arcsec.reserve(m_reference_samples.size());
+    zenith_errors_arcsec.reserve(m_reference_samples.size());
+    sun_vector_errors_arcsec.reserve(m_reference_samples.size());
 
     for (const ReferenceSample& sample : m_reference_samples) {
         const SunCoordinates computed_coordinates =
             algorithm(sample.time_point, m_location);
 
-        const double azimuth_error = compute_azimuth_error(
+        const double signed_azimuth_error_rad = compute_signed_azimuth_error(
             computed_coordinates.azimuth,
             sample.reference_azimuth);
 
-        const double zenith_error = compute_zenith_error(
+        const double signed_zenith_error_rad = compute_signed_zenith_error(
             computed_coordinates.zenith_angle,
             sample.reference_zenith);
 
-        const double angular_error = compute_angular_error(
+        const double angular_error_rad = compute_angular_error(
             computed_coordinates.azimuth,
             computed_coordinates.zenith_angle,
             sample.reference_azimuth,
             sample.reference_zenith);
 
-        sum_angular_error += angular_error;
-        sum_azimuth_error += azimuth_error;
-        sum_zenith_error += zenith_error;
-        max_angular_error = std::max(max_angular_error, angular_error);
-        max_azimuth_error = std::max(max_azimuth_error, azimuth_error);
-        max_zenith_error = std::max(max_zenith_error, zenith_error);
+        azimuth_errors_arcsec.push_back(
+            signed_azimuth_error_rad * RAD_TO_ARCSEC);
+
+        zenith_errors_arcsec.push_back(
+            signed_zenith_error_rad * RAD_TO_ARCSEC);
+
+        sun_vector_errors_arcsec.push_back(
+            angular_error_rad * RAD_TO_ARCSEC);
     }
 
-    const double sample_count = static_cast<double>(m_reference_samples.size());
-
     EvaluationMetrics metrics{};
-    metrics.mean_angular_error = sum_angular_error / sample_count;
-    metrics.mean_azimuth_error = sum_azimuth_error / sample_count;
-    metrics.mean_zenith_error = sum_zenith_error / sample_count;
-    metrics.max_angular_error = max_angular_error;
-    metrics.max_azimuth_error = max_azimuth_error;
-    metrics.max_zenith_error = max_zenith_error;
+    metrics.azimuth_error_arcsec =
+        compute_statistics(azimuth_errors_arcsec);
+    metrics.zenith_error_arcsec =
+        compute_statistics(zenith_errors_arcsec);
+    metrics.sun_vector_error_arcsec =
+        compute_statistics(sun_vector_errors_arcsec);
     metrics.sample_count = m_reference_samples.size();
+
     return metrics;
 }
 
@@ -105,7 +112,7 @@ void SunPositionEvaluator::load_reference_samples(
             "Failed to read binary dataset header: " + mica_binary_file_path);
     }
 
-    if (std::memcmp(header.magic, "MICABIN1", 8) != 0) {
+    if (std::memcmp(header.magic.data(), "MICABIN1", 8) != 0) {
         throw std::runtime_error(
             "Invalid MICA binary dataset magic: " + mica_binary_file_path);
     }
@@ -136,6 +143,7 @@ void SunPositionEvaluator::load_reference_samples(
         sample.time_point.seconds = binary_sample.seconds;
         sample.reference_zenith = binary_sample.zenith_angle;
         sample.reference_azimuth = binary_sample.azimuth;
+
         m_reference_samples.push_back(sample);
     }
 
@@ -145,22 +153,28 @@ void SunPositionEvaluator::load_reference_samples(
     }
 }
 
-double SunPositionEvaluator::compute_azimuth_error(
+double SunPositionEvaluator::compute_signed_azimuth_error(
     double computed_azimuth,
     double reference_azimuth)
 {
-    double error = std::fabs(computed_azimuth - reference_azimuth);
-    if (error > kPi) {
-        error = kTwoPi - error;
+    double error = computed_azimuth - reference_azimuth;
+
+    while (error <= -kPi) {
+        error += kTwoPi;
     }
+
+    while (error > kPi) {
+        error -= kTwoPi;
+    }
+
     return error;
 }
 
-double SunPositionEvaluator::compute_zenith_error(
+double SunPositionEvaluator::compute_signed_zenith_error(
     double computed_zenith,
     double reference_zenith)
 {
-    return std::fabs(computed_zenith - reference_zenith);
+    return computed_zenith - reference_zenith;
 }
 
 double SunPositionEvaluator::compute_angular_error(
@@ -187,4 +201,46 @@ double SunPositionEvaluator::compute_angular_error(
         computed_z * reference_z;
 
     return std::acos(clamp_to_unit_interval(dot_product));
+}
+
+ErrorStatistics SunPositionEvaluator::compute_statistics(
+    const std::vector<double>& values)
+{
+    if (values.empty()) {
+        throw std::runtime_error("Cannot compute statistics for an empty vector.");
+    }
+
+    const double sample_count = static_cast<double>(values.size());
+
+    double sum = 0.0;
+    double minimum = std::numeric_limits<double>::infinity();
+    double maximum = -std::numeric_limits<double>::infinity();
+
+    for (double value : values) {
+        sum += value;
+        minimum = std::min(minimum, value);
+        maximum = std::max(maximum, value);
+    }
+
+    const double average = sum / sample_count;
+
+    double squared_sum = 0.0;
+    double mean_deviation_sum = 0.0;
+
+    for (double value : values) {
+        const double delta = value - average;
+        squared_sum += delta * delta;
+        mean_deviation_sum += std::fabs(delta);
+    }
+
+    ErrorStatistics statistics{};
+    statistics.average = average;
+    statistics.standard_deviation =
+        std::sqrt(squared_sum / sample_count);
+    statistics.mean_deviation =
+        mean_deviation_sum / sample_count;
+    statistics.minimum = minimum;
+    statistics.maximum = maximum;
+
+    return statistics;
 }

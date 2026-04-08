@@ -14,14 +14,19 @@ struct ReferenceSample {
     double reference_azimuth;
 };
 
+struct ErrorStatistics {
+    double average = 0.0;
+    double standard_deviation = 0.0;
+    double mean_deviation = 0.0;
+    double minimum = 0.0;
+    double maximum = 0.0;
+};
+
 struct EvaluationMetrics {
-    double mean_angular_error;
-    double mean_azimuth_error;
-    double mean_zenith_error;
-    double max_angular_error;
-    double max_azimuth_error;
-    double max_zenith_error;
-    std::size_t sample_count;
+    ErrorStatistics azimuth_error_arcsec;
+    ErrorStatistics zenith_error_arcsec;
+    ErrorStatistics sun_vector_error_arcsec;
+    std::size_t sample_count = 0;
 };
 
 class SunPositionEvaluator {
@@ -37,13 +42,16 @@ public:
         const SunPositionAlgorithm::ParameterVector& parameters) const;
 
 private:
+    std::vector<ReferenceSample> m_reference_samples;
+    GeoLocation m_location;
+
     void load_reference_samples(const std::string& mica_binary_file_path);
 
-    static double compute_azimuth_error(
+    static double compute_signed_azimuth_error(
         double computed_azimuth,
         double reference_azimuth);
 
-    static double compute_zenith_error(
+    static double compute_signed_zenith_error(
         double computed_zenith,
         double reference_zenith);
 
@@ -53,8 +61,8 @@ private:
         double reference_azimuth,
         double reference_zenith);
 
-    std::vector<ReferenceSample> m_reference_samples;
-    GeoLocation m_location;
+    static ErrorStatistics compute_statistics(
+        const std::vector<double>& values);
 };
 
 #endif // SUN_POSITION_EVALUATOR_H

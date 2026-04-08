@@ -19,6 +19,7 @@ Thumbs.db
 # =========================================
 
 build/
+build_*/
 build-cpp/
 cmake-build-*/
 CMakeFiles/
@@ -113,6 +114,7 @@ data/
 datasets/
 *.csv
 *.bin
+!basic_test/data/MICA_psa_2020_2050_MB.csv
 
 # If you want to keep small example data, whitelist it:
 
@@ -130,6 +132,9 @@ results/
 artifacts/
 logs/
 *.jsonl
+basic_test/data/*.bin
+basic_test/*_output.json
+basic_test/benchmark-*.txt
 
 # =========================================
 
