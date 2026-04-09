@@ -116,6 +116,8 @@ data/
 datasets/
 *.csv
 *.bin
+!basic_test/
+!basic_test/data/
 !basic_test/data/MICA_psa_2020_2050_MB.csv
 
 # If you want to keep small example data, whitelist it:
