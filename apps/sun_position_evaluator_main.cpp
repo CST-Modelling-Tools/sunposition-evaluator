@@ -8,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 using json = nlohmann::ordered_json;
@@ -17,6 +18,7 @@ namespace {
 struct CliArguments {
     std::string m_input_file_path;
     std::string m_output_file_path;
+    std::string m_spec_file_path;
 };
 
 CliArguments parse_command_line_arguments(int argc, char* argv[])
@@ -38,6 +40,12 @@ CliArguments parse_command_line_arguments(int argc, char* argv[])
             }
             arguments.m_output_file_path = argv[++i];
         }
+        else if (argument == "--spec") {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("Missing value after --spec.");
+            }
+            arguments.m_spec_file_path = argv[++i];
+        }
         else {
             throw std::runtime_error("Unknown command-line argument: " + argument);
         }
@@ -46,7 +54,8 @@ CliArguments parse_command_line_arguments(int argc, char* argv[])
     if (arguments.m_input_file_path.empty() ||
         arguments.m_output_file_path.empty()) {
         throw std::runtime_error(
-            "Usage: sun_position_evaluator --input input.json --output output.json");
+            "Usage: sun_position_evaluator --input input.json --output output.json "
+            "[--spec sun_position_evaluator_spec.json]");
     }
 
     return arguments;
@@ -74,19 +83,54 @@ void write_json_file(const fs::path& file_path, const json& output_json)
     output_file << std::setw(4) << output_json << '\n';
 }
 
-fs::path find_evaluator_spec_file()
+fs::path normalize_path(const fs::path& path)
 {
-    const fs::path current_working_directory = fs::current_path();
-    const fs::path evaluator_spec_file_path =
-        current_working_directory / "sun_position_evaluator_spec.json";
-
-    if (!fs::exists(evaluator_spec_file_path)) {
-        throw std::runtime_error(
-            "Could not find evaluator_spec.json in working directory: " +
-            current_working_directory.string());
+    std::error_code error_code;
+    const fs::path canonical_path = fs::weakly_canonical(path, error_code);
+    if (!error_code) {
+        return canonical_path;
     }
 
-    return evaluator_spec_file_path;
+    return fs::absolute(path).lexically_normal();
+}
+
+fs::path find_evaluator_spec_file(
+    const CliArguments& arguments,
+    const fs::path& input_file_path)
+{
+    std::vector<fs::path> candidates;
+
+    if (!arguments.m_spec_file_path.empty()) {
+        candidates.push_back(arguments.m_spec_file_path);
+    }
+
+    if (!input_file_path.empty()) {
+        candidates.push_back(
+            input_file_path.parent_path() / "sun_position_evaluator_spec.json");
+    }
+
+    candidates.push_back("sun_position_evaluator_spec.json");
+
+    #ifdef SUNPOSITION_SOURCE_DIR
+    candidates.push_back(
+        fs::path(SUNPOSITION_SOURCE_DIR) /
+        "basic_test" /
+        "sun_position_evaluator_spec.json");
+    #endif
+
+    for (const fs::path& candidate : candidates) {
+        if (candidate.empty()) {
+            continue;
+        }
+
+        if (fs::exists(candidate)) {
+            return normalize_path(candidate);
+        }
+    }
+
+    throw std::runtime_error(
+        "Could not find sun_position_evaluator_spec.json. "
+        "Pass --spec explicitly or place the spec next to the input JSON.");
 }
 
 double parse_named_parameter(
@@ -172,11 +216,11 @@ fs::path parse_mica_binary_file_path(
         evaluator_spec_json.at("mica_binary_file_path").get<std::string>();
 
     if (raw_path.is_absolute()) {
-        return raw_path;
+        return normalize_path(raw_path);
     }
 
     const fs::path evaluator_spec_directory = evaluator_spec_file_path.parent_path();
-    return fs::weakly_canonical(evaluator_spec_directory / raw_path);
+    return normalize_path(evaluator_spec_directory / raw_path);
 }
 
 GeoLocation parse_location(const json& evaluator_spec_json)
@@ -255,7 +299,8 @@ int main(int argc, char* argv[])
 
         const json input_json = read_json_file(input_file_path);
 
-        const fs::path evaluator_spec_file_path = find_evaluator_spec_file();
+        const fs::path evaluator_spec_file_path =
+            find_evaluator_spec_file(arguments, input_file_path);
         const json evaluator_spec_json = read_json_file(evaluator_spec_file_path);
 
         const SunPositionAlgorithm::ParameterVector parameters =
@@ -267,7 +312,7 @@ int main(int argc, char* argv[])
         const GeoLocation location =
             parse_location(evaluator_spec_json);
 
-        SunPositionEvaluator evaluator(mica_binary_file_path.string(), location);
+        SunPositionEvaluator evaluator(mica_binary_file_path, location);
         const EvaluationMetrics metrics = evaluator.evaluate(parameters);
 
         const json output_json = build_success_output_json(metrics);

@@ -5,6 +5,7 @@
 #include "sun_position_algorithm.h"
 
 #include <cstddef>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,10 @@ struct EvaluationMetrics {
 class SunPositionEvaluator {
 public:
     SunPositionEvaluator(
+        const std::filesystem::path& mica_binary_file_path,
+        const GeoLocation& location);
+
+    SunPositionEvaluator(
         const std::string& mica_binary_file_path,
         const GeoLocation& location);
 
@@ -45,7 +50,7 @@ private:
     std::vector<ReferenceSample> m_reference_samples;
     GeoLocation m_location;
 
-    void load_reference_samples(const std::string& mica_binary_file_path);
+    void load_reference_samples(const std::filesystem::path& mica_binary_file_path);
 
     static double compute_signed_azimuth_error(
         double computed_azimuth,
@@ -64,5 +69,7 @@ private:
     static ErrorStatistics compute_statistics(
         const std::vector<double>& values);
 };
+
+bool sun_position_openmp_enabled() noexcept;
 
 #endif // SUN_POSITION_EVALUATOR_H

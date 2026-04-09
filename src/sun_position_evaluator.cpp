@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <numbers>
@@ -21,11 +22,18 @@ double clamp_to_unit_interval(double value)
 } // namespace
 
 SunPositionEvaluator::SunPositionEvaluator(
-    const std::string& mica_binary_file_path,
+    const std::filesystem::path& mica_binary_file_path,
     const GeoLocation& location)
     : m_location(location)
 {
     load_reference_samples(mica_binary_file_path);
+}
+
+SunPositionEvaluator::SunPositionEvaluator(
+    const std::string& mica_binary_file_path,
+    const GeoLocation& location)
+    : SunPositionEvaluator(std::filesystem::path(mica_binary_file_path), location)
+{
 }
 
 const std::vector<ReferenceSample>&
@@ -52,11 +60,18 @@ EvaluationMetrics SunPositionEvaluator::evaluate(
     std::vector<double> zenith_errors_arcsec;
     std::vector<double> sun_vector_errors_arcsec;
 
-    azimuth_errors_arcsec.reserve(m_reference_samples.size());
-    zenith_errors_arcsec.reserve(m_reference_samples.size());
-    sun_vector_errors_arcsec.reserve(m_reference_samples.size());
+    azimuth_errors_arcsec.resize(m_reference_samples.size());
+    zenith_errors_arcsec.resize(m_reference_samples.size());
+    sun_vector_errors_arcsec.resize(m_reference_samples.size());
 
-    for (const ReferenceSample& sample : m_reference_samples) {
+    #if defined(_OPENMP)
+    #pragma omp parallel for
+    #endif
+    for (int sample_index = 0;
+         sample_index < static_cast<int>(m_reference_samples.size());
+         ++sample_index) {
+        const ReferenceSample& sample =
+            m_reference_samples[static_cast<std::size_t>(sample_index)];
         const SunCoordinates computed_coordinates =
             algorithm(sample.time_point, m_location);
 
@@ -74,14 +89,14 @@ EvaluationMetrics SunPositionEvaluator::evaluate(
             sample.reference_azimuth,
             sample.reference_zenith);
 
-        azimuth_errors_arcsec.push_back(
-            signed_azimuth_error_rad * RAD_TO_ARCSEC);
+        azimuth_errors_arcsec[static_cast<std::size_t>(sample_index)] =
+            signed_azimuth_error_rad * RAD_TO_ARCSEC;
 
-        zenith_errors_arcsec.push_back(
-            signed_zenith_error_rad * RAD_TO_ARCSEC);
+        zenith_errors_arcsec[static_cast<std::size_t>(sample_index)] =
+            signed_zenith_error_rad * RAD_TO_ARCSEC;
 
-        sun_vector_errors_arcsec.push_back(
-            angular_error_rad * RAD_TO_ARCSEC);
+        sun_vector_errors_arcsec[static_cast<std::size_t>(sample_index)] =
+            angular_error_rad * RAD_TO_ARCSEC;
     }
 
     EvaluationMetrics metrics{};
@@ -97,24 +112,24 @@ EvaluationMetrics SunPositionEvaluator::evaluate(
 }
 
 void SunPositionEvaluator::load_reference_samples(
-    const std::string& mica_binary_file_path)
+    const std::filesystem::path& mica_binary_file_path)
 {
     std::ifstream file(mica_binary_file_path, std::ios::binary);
     if (!file.is_open()) {
         throw std::runtime_error(
-            "Failed to open MICA binary file: " + mica_binary_file_path);
+            "Failed to open MICA binary file: " + mica_binary_file_path.string());
     }
 
     MicaBinaryDatasetHeader header{};
     file.read(reinterpret_cast<char*>(&header), sizeof(header));
     if (!file) {
         throw std::runtime_error(
-            "Failed to read binary dataset header: " + mica_binary_file_path);
+            "Failed to read binary dataset header: " + mica_binary_file_path.string());
     }
 
     if (std::memcmp(header.magic.data(), "MICABIN1", 8) != 0) {
         throw std::runtime_error(
-            "Invalid MICA binary dataset magic: " + mica_binary_file_path);
+            "Invalid MICA binary dataset magic: " + mica_binary_file_path.string());
     }
 
     if (header.version != 1) {
@@ -243,4 +258,13 @@ ErrorStatistics SunPositionEvaluator::compute_statistics(
     statistics.maximum = maximum;
 
     return statistics;
+}
+
+bool sun_position_openmp_enabled() noexcept
+{
+    #if defined(_OPENMP)
+    return true;
+    #else
+    return false;
+    #endif
 }

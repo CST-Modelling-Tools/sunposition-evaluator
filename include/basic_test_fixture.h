@@ -22,4 +22,7 @@ BasicTestFixture load_basic_test_fixture(
 
 void ensure_basic_test_binary_exists(const BasicTestFixture& fixture);
 
+std::filesystem::path resolve_basic_test_fixture_directory(
+    const std::filesystem::path& fixture_directory);
+
 #endif // BASIC_TEST_FIXTURE_H

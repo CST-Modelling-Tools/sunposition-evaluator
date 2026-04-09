@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
         ensure_basic_test_binary_exists(fixture);
 
         SunPositionEvaluator evaluator(
-            fixture.m_binary_file_path.string(),
+            fixture.m_binary_file_path,
             fixture.m_location);
 
         const EvaluationMetrics metrics =

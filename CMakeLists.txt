@@ -5,6 +5,9 @@ include(CTest)
 include(GNUInstallDirs)
 
 option(SUNPOSITION_BUILD_BENCHMARK "Build the timing benchmark executable" ON)
+option(SUNPOSITION_ENABLE_OPENMP "Enable OpenMP when the toolchain supports it" ON)
+
+set(SUNPOSITION_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_library(sun_position_lib
     src/sun_position_algorithm.cpp
@@ -12,7 +15,17 @@ add_library(sun_position_lib
 )
 
 target_compile_features(sun_position_lib PUBLIC cxx_std_20)
-target_include_directories(sun_position_lib PUBLIC include)
+target_include_directories(sun_position_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+if(SUNPOSITION_ENABLE_OPENMP)
+    find_package(OpenMP QUIET)
+endif()
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(sun_position_lib PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 add_library(sun_position_fixture_support
     src/basic_test_fixture.cpp
@@ -20,8 +33,13 @@ add_library(sun_position_fixture_support
 )
 
 target_compile_features(sun_position_fixture_support PUBLIC cxx_std_20)
-target_include_directories(sun_position_fixture_support PUBLIC include)
+target_include_directories(sun_position_fixture_support PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
 target_link_libraries(sun_position_fixture_support PUBLIC sun_position_lib)
+target_compile_definitions(sun_position_fixture_support
+    PUBLIC SUNPOSITION_SOURCE_DIR="${SUNPOSITION_SOURCE_DIR}"
+)
 
 add_executable(build_mica_binary_dataset
     apps/build_mica_binary_dataset.cpp
@@ -34,7 +52,12 @@ add_executable(sun_position_evaluator
 )
 
 target_link_libraries(sun_position_evaluator PRIVATE sun_position_lib)
-target_include_directories(sun_position_evaluator PRIVATE include)
+target_include_directories(sun_position_evaluator PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_compile_definitions(sun_position_evaluator PRIVATE
+    SUNPOSITION_SOURCE_DIR="${SUNPOSITION_SOURCE_DIR}"
+)
 
 if(SUNPOSITION_BUILD_BENCHMARK)
     add_executable(sun_position_benchmark
@@ -55,6 +78,13 @@ if(BUILD_TESTING)
         NAME sun_position_regression
         COMMAND sun_position_regression_test --fixture-dir "${CMAKE_SOURCE_DIR}/basic_test"
     )
+
+    if(SUNPOSITION_BUILD_BENCHMARK)
+        add_test(
+            NAME sun_position_benchmark_smoke
+            COMMAND sun_position_benchmark --fixture-dir "${CMAKE_SOURCE_DIR}/basic_test" --repetitions 1
+        )
+    endif()
 endif()
 
 set(sunposition_install_targets
@@ -68,27 +98,13 @@ endif()
 
 install(
     TARGETS ${sunposition_install_targets}
-    RUNTIME DESTINATION "${CMAKE_SOURCE_DIR}/bin"
-    CONFIGURATIONS Release
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
 
-if(CMAKE_CONFIGURATION_TYPES)
-    add_custom_target(
-        install_release
-        COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --config Release
-        DEPENDS ${sunposition_install_targets}
-        COMMENT "Installing Release executables into ${CMAKE_SOURCE_DIR}/bin"
-    )
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP support enabled via OpenMP::OpenMP_CXX")
+elseif(SUNPOSITION_ENABLE_OPENMP)
+    message(STATUS "OpenMP support not found; building with sequential fallback")
 else()
-    add_custom_target(
-        install_release
-        COMMAND
-            "${CMAKE_COMMAND}"
-            -DCMAKE_COMMAND="${CMAKE_COMMAND}"
-            -DCMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
-            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-            -P "${CMAKE_SOURCE_DIR}/cmake/install_release_single_config.cmake"
-        DEPENDS ${sunposition_install_targets}
-        COMMENT "Installing executables into ${CMAKE_SOURCE_DIR}/bin"
-    )
+    message(STATUS "OpenMP support disabled by SUNPOSITION_ENABLE_OPENMP=OFF")
 endif()

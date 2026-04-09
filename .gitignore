@@ -19,6 +19,7 @@ Thumbs.db
 # =========================================
 
 build/
+build-*/
 build_*/
 build-cpp/
 cmake-build-*/
@@ -91,6 +92,7 @@ htmlcov/
 # =========================================
 
 .vscode/
+.vs/
 .idea/
 *.code-workspace
 
@@ -144,6 +146,7 @@ basic_test/benchmark-*.txt
 
 tmp/
 temp/
+out/
 
 # =========================================
 

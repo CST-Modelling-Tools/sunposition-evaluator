@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
         ensure_basic_test_binary_exists(fixture);
 
         SunPositionEvaluator evaluator(
-            fixture.m_binary_file_path.string(),
+            fixture.m_binary_file_path,
             fixture.m_location);
 
         // One warm-up evaluation avoids counting one-time effects such as file
@@ -106,6 +106,8 @@ int main(int argc, char* argv[])
         std::cout << "sample_count: " << warmup_metrics.sample_count << '\n';
         std::cout << "objective_arcsec: "
                   << warmup_metrics.sun_vector_error_arcsec.average << '\n';
+        std::cout << "openmp_enabled: "
+                  << (sun_position_openmp_enabled() ? "true" : "false") << '\n';
         std::cout << "repetitions: " << arguments.m_repetitions << '\n';
         std::cout << "warmup_runs: 1\n";
         std::cout << "total_wall_time_ms: " << total_duration_ms << '\n';

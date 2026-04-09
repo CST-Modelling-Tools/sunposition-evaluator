@@ -80,7 +80,11 @@ void build_mica_binary_dataset(
         samples.push_back(parse_csv_row(line, line_number));
     }
 
-    std::filesystem::create_directories(output_binary_path.parent_path());
+    const std::filesystem::path output_directory =
+        output_binary_path.parent_path();
+    if (!output_directory.empty()) {
+        std::filesystem::create_directories(output_directory);
+    }
 
     std::ofstream output_file(output_binary_path, std::ios::binary);
     if (!output_file.is_open()) {

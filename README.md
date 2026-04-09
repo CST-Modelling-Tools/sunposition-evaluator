@@ -42,46 +42,80 @@ The tolerances are documented in
 
 ## Build
 
-Configure and build with CMake:
+The repository builds from source on Windows, Linux, and macOS with standard
+CMake workflows. Normal builds keep executables in the build tree; installation
+uses a standard CMake install prefix rather than writing back into the source
+tree.
+
+The main CMake options are:
+
+- `-DSUNPOSITION_BUILD_BENCHMARK=ON|OFF`
+- `-DSUNPOSITION_ENABLE_OPENMP=ON|OFF`
+- `-DBUILD_TESTING=ON|OFF`
+
+OpenMP is optional. CMake prints one of these configure messages:
+
+- `OpenMP support enabled via OpenMP::OpenMP_CXX`
+- `OpenMP support not found; building with sequential fallback`
+- `OpenMP support disabled by SUNPOSITION_ENABLE_OPENMP=OFF`
+
+### Windows
+
+Visual Studio generator:
 
 ```powershell
-cmake -S . -B build
+cmake -S . -B build -G "Visual Studio 17 2022"
 cmake --build build --config Release
 ```
 
-Normal builds now keep executables and companion files in the build tree rather
-than in the repository root `bin/` directory.
-
-If you use a single-config generator such as Ninja or Unix Makefiles, configure
-the build tree as Release:
+Ninja or other single-config generator:
 
 ```powershell
+cmake -S . -B build-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-ninja
+```
+
+### Linux
+
+```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-## Install Release Executables
+### macOS
 
-To copy only the release `.exe` files into `bin/`:
+Build without OpenMP works out of the box with Apple Clang:
 
-```powershell
-cmake --install build --config Release
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
 
-There is also a convenience target:
+If you want OpenMP on macOS, use a toolchain that provides it, typically LLVM
+installed via Homebrew:
 
-```powershell
-cmake --build build --target install_release --config Release
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build build
 ```
 
-For single-config generators, use:
+If `find_package(OpenMP)` still does not detect OpenMP with Apple Clang, the
+repository still builds and runs correctly in sequential mode.
+
+## Install
+
+Use a standard install prefix on every platform:
 
 ```powershell
-cmake --build build --target install_release
+cmake --install build --config Release --prefix out/install
 ```
 
-This keeps `bin/` as a clean install location for release programs instead of a
-general build artifact directory.
+On single-config generators:
+
+```bash
+cmake --install build --prefix out/install
+```
 
 ## Run The Regression Test
 
@@ -91,10 +125,16 @@ Using CTest:
 ctest --test-dir build --output-on-failure --build-config Release
 ```
 
-Running the executable directly from the repository root also works:
+Running the executable directly also works:
 
 ```powershell
-.\build\sun_position_regression_test.exe --fixture-dir basic_test
+.\build\Release\sun_position_regression_test.exe --fixture-dir basic_test
+```
+
+Single-config example:
+
+```bash
+./build/sun_position_regression_test --fixture-dir basic_test
 ```
 
 ## Run The Benchmark
@@ -105,13 +145,19 @@ default PSA+ parameter set.
 Default run:
 
 ```powershell
-.\build\sun_position_benchmark.exe --fixture-dir basic_test
+.\build\Release\sun_position_benchmark.exe --fixture-dir basic_test
 ```
 
 Custom repetition count:
 
 ```powershell
-.\build\sun_position_benchmark.exe --fixture-dir basic_test --repetitions 10
+.\build\Release\sun_position_benchmark.exe --fixture-dir basic_test --repetitions 10
+```
+
+Single-config example:
+
+```bash
+./build/sun_position_benchmark --fixture-dir basic_test --repetitions 10
 ```
 
 The benchmark performs one warm-up evaluation and then reports:
@@ -136,7 +182,7 @@ Recommended repetition counts:
 Suggested comparison workflow:
 
 ```powershell
-.\bin\sun_position_benchmark.exe --fixture-dir basic_test --repetitions 100
+.\out\install\sun_position_benchmark.exe --fixture-dir basic_test --repetitions 100
 ```
 
 When comparing two versions, keep these conditions the same:
@@ -150,3 +196,32 @@ When comparing two versions, keep these conditions the same:
 For optimization work, prefer comparing `average_time_per_evaluation_ms`.
 `best_time_ms` is still useful as a lower-noise reference point, but average
 time is the more reliable regression gate.
+
+## Evaluator CLI
+
+The evaluator accepts:
+
+```text
+sun_position_evaluator --input <input.json> --output <output.json> [--spec <sun_position_evaluator_spec.json>]
+```
+
+If `--spec` is omitted, the executable looks for
+`sun_position_evaluator_spec.json` in this order:
+
+1. next to the input JSON
+2. in the current working directory
+3. in the repository's `basic_test/` directory
+
+This removes the previous requirement to run the evaluator only from a specific
+working directory.
+
+## OpenMP Notes
+
+- OpenMP is enabled target-wise only when `find_package(OpenMP)` succeeds.
+- The repository never requires OpenMP to build.
+- If OpenMP is unavailable, the evaluator, regression test, benchmark, and
+  dataset builder all continue to work with the sequential evaluator path.
+- The benchmark prints `openmp_enabled: true|false` so the active mode is easy
+  to confirm at runtime.
+- The evaluator implementation keeps the same scientific calculations in both
+  modes; OpenMP only parallelizes the per-sample evaluation loop.

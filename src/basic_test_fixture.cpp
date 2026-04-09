@@ -12,6 +12,28 @@ using json = nlohmann::ordered_json;
 
 namespace {
 
+fs::path normalize_path(const fs::path& path)
+{
+    std::error_code error_code;
+    const fs::path canonical_path = fs::weakly_canonical(path, error_code);
+    if (!error_code) {
+        return canonical_path;
+    }
+
+    return fs::absolute(path).lexically_normal();
+}
+
+fs::path resolve_path_from_base(
+    const fs::path& raw_path,
+    const fs::path& base_directory)
+{
+    if (raw_path.is_absolute()) {
+        return normalize_path(raw_path);
+    }
+
+    return normalize_path(base_directory / raw_path);
+}
+
 json read_json_file(const fs::path& file_path)
 {
     std::ifstream input_file(file_path);
@@ -102,18 +124,39 @@ fs::path parse_binary_path(
         spec_json.at("mica_binary_file_path").get<std::string>();
 
     if (raw_path.is_absolute()) {
-        return raw_path;
+        return normalize_path(raw_path);
     }
 
-    return fs::weakly_canonical(spec_file_path.parent_path() / raw_path);
+    return resolve_path_from_base(raw_path, spec_file_path.parent_path());
 }
 
 } // namespace
 
+fs::path resolve_basic_test_fixture_directory(const fs::path& fixture_directory)
+{
+    const fs::path direct_candidate = normalize_path(fixture_directory);
+    if (fs::exists(direct_candidate)) {
+        return direct_candidate;
+    }
+
+    #ifdef SUNPOSITION_SOURCE_DIR
+    const fs::path source_tree_candidate =
+        normalize_path(fs::path(SUNPOSITION_SOURCE_DIR) / fixture_directory);
+    if (fs::exists(source_tree_candidate)) {
+        return source_tree_candidate;
+    }
+    #endif
+
+    throw std::runtime_error(
+        "Fixture directory does not exist: " +
+        normalize_path(fixture_directory).string());
+}
+
 BasicTestFixture load_basic_test_fixture(const fs::path& fixture_directory)
 {
     BasicTestFixture fixture{};
-    fixture.m_fixture_directory = fs::weakly_canonical(fixture_directory);
+    fixture.m_fixture_directory =
+        resolve_basic_test_fixture_directory(fixture_directory);
     fixture.m_spec_file_path =
         fixture.m_fixture_directory / "sun_position_evaluator_spec.json";
     fixture.m_input_file_path =
