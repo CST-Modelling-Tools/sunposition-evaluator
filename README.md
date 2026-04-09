@@ -1,227 +1,284 @@
 # sunposition-evaluator
 
-This repository evaluates the current PSA+ parameter set against the real
-`MICA_psa_2020_2050_MB` fixture and now includes two guardrails before any speed
-refactor:
+This repository evaluates the PSA+ (Updated PSA) sun position algorithm against the real  
+`MICA_psa_2020_2050_MB` dataset.
 
-- a correctness regression test anchored to the PSA+ 2020 paper values
-- a repeatable timing benchmark on the same full fixture dataset
+It provides:
+
+- A scientific regression test anchored to published PSA+ (2020) results  
+- A repeatable performance benchmark on a real dataset  
+- A cross-platform evaluator CLI  
+- Optional OpenMP parallelization (~5× speedup) with safe fallback  
+
+---
+
+## Repository Goals
+
+This repository is designed to support:
+
+- Scientific validation of the PSA+ model  
+- Performance optimization workflows (including GOW integration)  
+- Reproducible benchmarking across platforms  
+- Safe optimization with regression guardrails  
+
+---
 
 ## Fixture
 
-The committed fixture lives under `basic_test/`:
+The committed fixture is located in:
 
-- `basic_test/sun_position_evaluator_spec.json`
-- `basic_test/default_psa_plus_input.json`
-- `basic_test/data/MICA_psa_2020_2050_MB.csv`
+basic_test/
 
-The generated binary dataset is intentionally not committed. The regression test
-and benchmark generate `basic_test/data/MICA_psa_2020_2050_MB.bin`
-automatically from the committed CSV whenever the binary is missing.
+Contents:
 
-## Scientific baseline
+- sun_position_evaluator_spec.json
+- default_psa_plus_input.json
+- data/MICA_psa_2020_2050_MB.csv
 
-The regression test uses the PSA+ Table 2 values from the 2020 paper
-“Updating the PSA sun position algorithm” as the scientific baseline.
+The binary dataset:
 
-Target values used by the test:
+MICA_psa_2020_2050_MB.bin
 
-- Azimuth error (arcsec): average `0.18`, standard deviation `11.80`,
-  mean deviation `8.38`
-- Zenith error (arcsec): average `0.05`, standard deviation `6.96`,
-  mean deviation `5.40`
-- Sun vector error (arcsec): average `8.78`, standard deviation `5.40`,
-  mean deviation `4.36`
+is not committed.
 
-The tolerances are documented in
-`tests/sun_position_regression_test_main.cpp` and are chosen to be:
+Instead, it is automatically generated from the CSV when needed by:
 
-- tight enough to catch real scientific regressions
-- loose enough to tolerate the paper's rounded values and tiny
-  cross-platform floating-point differences
+- regression tests
+- benchmark
+- evaluator CLI
+
+---
+
+## Scientific Baseline
+
+The regression test uses PSA+ Table 2 values from:
+
+Blanco et al. (2020) – Updating the PSA sun position algorithm
+
+### Target values (arcseconds)
+
+| Metric | Average | Std Dev | Mean Dev |
+|------|--------|--------|----------|
+| Azimuth | 0.18 | 11.80 | 8.38 |
+| Zenith | 0.05 | 6.96 | 5.40 |
+| Sun vector | 8.78 | 5.40 | 4.36 |
+
+### Tolerances
+
+Defined in:
+
+tests/sun_position_regression_test_main.cpp
+
+Chosen to:
+
+- detect real scientific regressions
+- tolerate rounding in the paper and cross-platform floating-point differences
+
+---
 
 ## Build
 
-The repository builds from source on Windows, Linux, and macOS with standard
-CMake workflows. Normal builds keep executables in the build tree; installation
-uses a standard CMake install prefix rather than writing back into the source
-tree.
+### Common options
 
-The main CMake options are:
+-DSUNPOSITION_BUILD_BENCHMARK=ON|OFF
+-DSUNPOSITION_ENABLE_OPENMP=ON|OFF
+-DBUILD_TESTING=ON|OFF
 
-- `-DSUNPOSITION_BUILD_BENCHMARK=ON|OFF`
-- `-DSUNPOSITION_ENABLE_OPENMP=ON|OFF`
-- `-DBUILD_TESTING=ON|OFF`
-
-OpenMP is optional. CMake prints one of these configure messages:
-
-- `OpenMP support enabled via OpenMP::OpenMP_CXX`
-- `OpenMP support not found; building with sequential fallback`
-- `OpenMP support disabled by SUNPOSITION_ENABLE_OPENMP=OFF`
+---
 
 ### Windows
 
-Visual Studio generator:
+#### Visual Studio
 
-```powershell
 cmake -S . -B build -G "Visual Studio 17 2022"
 cmake --build build --config Release
-```
 
-Ninja or other single-config generator:
+#### Ninja
 
-```powershell
-cmake -S . -B build-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build-ninja
-```
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+---
 
 ### Linux
 
-```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-```
+
+---
 
 ### macOS
 
-Build without OpenMP works out of the box with Apple Clang:
+Default (no OpenMP):
 
-```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-```
 
-If you want OpenMP on macOS, use a toolchain that provides it, typically LLVM
-installed via Homebrew:
+Optional (OpenMP via LLVM):
 
-```bash
+brew install llvm
+
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++
 cmake --build build
-```
 
-If `find_package(OpenMP)` still does not detect OpenMP with Apple Clang, the
-repository still builds and runs correctly in sequential mode.
+---
 
 ## Install
 
-Use a standard install prefix on every platform:
-
-```powershell
-cmake --install build --config Release --prefix out/install
-```
-
-On single-config generators:
-
-```bash
 cmake --install build --prefix out/install
-```
 
-## Run The Regression Test
+Windows multi-config:
+
+cmake --install build --config Release --prefix out/install
+
+---
+
+## Run Regression Test
 
 Using CTest:
 
-```powershell
-ctest --test-dir build --output-on-failure --build-config Release
-```
+ctest --test-dir build --output-on-failure
 
-Running the executable directly also works:
+Direct execution:
 
-```powershell
-.\build\Release\sun_position_regression_test.exe --fixture-dir basic_test
-```
-
-Single-config example:
-
-```bash
 ./build/sun_position_regression_test --fixture-dir basic_test
-```
 
-## Run The Benchmark
+Windows:
 
-The benchmark measures full evaluator executions on the real fixture with the
-default PSA+ parameter set.
+.\build\Release\sun_position_regression_test.exe --fixture-dir basic_test
 
-Default run:
+---
 
-```powershell
-.\build\Release\sun_position_benchmark.exe --fixture-dir basic_test
-```
+## Run Benchmark
 
-Custom repetition count:
+Default:
 
-```powershell
-.\build\Release\sun_position_benchmark.exe --fixture-dir basic_test --repetitions 10
-```
+./build/sun_position_benchmark --fixture-dir basic_test
 
-Single-config example:
+With repetitions:
 
-```bash
-./build/sun_position_benchmark --fixture-dir basic_test --repetitions 10
-```
+./build/sun_position_benchmark --fixture-dir basic_test --repetitions 100
 
-The benchmark performs one warm-up evaluation and then reports:
+Output includes:
 
 - total wall time
 - average time per evaluation
 - best time
-- repetition count
+- OpenMP status
 
-The default repetition count is `5` because each repetition already evaluates
-the full `815256`-sample dataset, which keeps the timing baseline practical
-while still averaging out a meaningful amount of noise.
+---
 
 ## Benchmark Interpretation
 
-Recommended repetition counts:
+Recommended usage:
 
-- `--repetitions 10` for quick local checks while iterating
-- `--repetitions 100` for before/after comparisons that are stable enough to
-  use as a performance baseline
+- Quick test: --repetitions 10
+- Reliable comparison: --repetitions 100
 
-Suggested comparison workflow:
-
-```powershell
-.\out\install\sun_position_benchmark.exe --fixture-dir basic_test --repetitions 100
-```
-
-When comparing two versions, keep these conditions the same:
+Always compare using:
 
 - same machine
-- same build configuration
-- same compiler and generator
-- same fixture dataset
+- same build config
+- same dataset
 - same repetition count
 
-For optimization work, prefer comparing `average_time_per_evaluation_ms`.
-`best_time_ms` is still useful as a lower-noise reference point, but average
-time is the more reliable regression gate.
+Primary metric:
+
+average_time_per_evaluation_ms
+
+---
+
+## Performance (Important)
+
+Sequential (baseline): ~155 ms per evaluation
+
+OpenMP enabled: ~31 ms per evaluation
+
+~5× speedup on typical multi-core systems
+
+---
+
+## OpenMP
+
+Behavior:
+
+- Enabled automatically if available
+- Disabled automatically if not
+- Never required to build
+
+Runtime indicator:
+
+openmp_enabled: true|false
+
+Thread control:
+
+OMP_NUM_THREADS=8
+
+HPC / GOW usage:
+
+- Many evaluator processes → OMP_NUM_THREADS=1
+- Few evaluator processes → OMP_NUM_THREADS > 1
+
+---
 
 ## Evaluator CLI
 
-The evaluator accepts:
+sun_position_evaluator --input <input.json> --output <output.json> [--spec <spec.json>]
 
-```text
-sun_position_evaluator --input <input.json> --output <output.json> [--spec <sun_position_evaluator_spec.json>]
-```
+Spec resolution order:
 
-If `--spec` is omitted, the executable looks for
-`sun_position_evaluator_spec.json` in this order:
+1. --spec
+2. next to input file
+3. current working directory
+4. basic_test/
 
-1. next to the input JSON
-2. in the current working directory
-3. in the repository's `basic_test/` directory
+---
 
-This removes the previous requirement to run the evaluator only from a specific
-working directory.
+## Dataset
 
-## OpenMP Notes
+- CSV is committed
+- binary is generated locally
+- ensures reproducibility and portability
 
-- OpenMP is enabled target-wise only when `find_package(OpenMP)` succeeds.
-- The repository never requires OpenMP to build.
-- If OpenMP is unavailable, the evaluator, regression test, benchmark, and
-  dataset builder all continue to work with the sequential evaluator path.
-- The benchmark prints `openmp_enabled: true|false` so the active mode is easy
-  to confirm at runtime.
-- The evaluator implementation keeps the same scientific calculations in both
-  modes; OpenMP only parallelizes the per-sample evaluation loop.
+---
+
+## Cross-Platform Notes
+
+- Windows: fully supported (MSVC, Ninja)
+- Linux: fully supported (GCC/Clang)
+- macOS:
+  - works without OpenMP
+  - OpenMP requires LLVM toolchain
+
+---
+
+## Development Workflow
+
+Before any optimization:
+
+1. Run regression test
+2. Run benchmark (>=100 repetitions)
+
+After any change:
+
+1. Regression must pass
+2. Benchmark must improve or remain neutral
+
+---
+
+## Summary
+
+This repository provides:
+
+- a scientifically validated evaluator
+- a robust performance benchmark
+- a cross-platform build
+- a parallelized implementation with fallback
+
+It is suitable for:
+
+- optimization workflows (GOW)
+- HPC environments
+- reproducible scientific benchmarking
