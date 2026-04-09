@@ -111,12 +111,12 @@ fs::path find_evaluator_spec_file(
 
     candidates.push_back("sun_position_evaluator_spec.json");
 
-    #ifdef SUNPOSITION_SOURCE_DIR
+#ifdef SUNPOSITION_SOURCE_DIR
     candidates.push_back(
         fs::path(SUNPOSITION_SOURCE_DIR) /
         "basic_test" /
         "sun_position_evaluator_spec.json");
-    #endif
+#endif
 
     for (const fs::path& candidate : candidates) {
         if (candidate.empty()) {
@@ -145,6 +145,35 @@ double parse_named_parameter(
     return parameter_container.at(parameter_name).get<double>();
 }
 
+bool has_named_parameter_set(const json& parameter_container)
+{
+    if (!parameter_container.is_object()) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < 15; ++i) {
+        const std::string parameter_name = "p" + std::to_string(i);
+        if (!parameter_container.contains(parameter_name)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+SunPositionAlgorithm::ParameterVector parse_parameter_vector_from_object(
+    const json& parameter_container)
+{
+    SunPositionAlgorithm::ParameterVector parameters{};
+
+    for (std::size_t i = 0; i < parameters.size(); ++i) {
+        const std::string parameter_name = "p" + std::to_string(i);
+        parameters[i] = parse_named_parameter(parameter_container, parameter_name);
+    }
+
+    return parameters;
+}
+
 SunPositionAlgorithm::ParameterVector parse_parameter_vector(const json& input_json)
 {
     SunPositionAlgorithm::ParameterVector parameters{};
@@ -165,42 +194,36 @@ SunPositionAlgorithm::ParameterVector parse_parameter_vector(const json& input_j
             return parameters;
         }
 
-        if (parameters_json.is_object()) {
-            for (std::size_t i = 0; i < parameters.size(); ++i) {
-                const std::string parameter_name = "p" + std::to_string(i);
-                parameters[i] = parse_named_parameter(parameters_json, parameter_name);
-            }
-
-            return parameters;
+        if (has_named_parameter_set(parameters_json)) {
+            return parse_parameter_vector_from_object(parameters_json);
         }
 
         throw std::runtime_error(
-            "'parameters' must be either an array or an object.");
+            "'parameters' must be either an array of 15 values or an object "
+            "containing p0 through p14.");
     }
 
-    bool has_top_level_named_parameters = true;
-    for (std::size_t i = 0; i < parameters.size(); ++i) {
-        const std::string parameter_name = "p" + std::to_string(i);
-        if (!input_json.contains(parameter_name)) {
-            has_top_level_named_parameters = false;
-            break;
+    if (input_json.contains("params")) {
+        const json& params_json = input_json.at("params");
+
+        if (has_named_parameter_set(params_json)) {
+            return parse_parameter_vector_from_object(params_json);
         }
+
+        throw std::runtime_error(
+            "'params' must be an object containing p0 through p14.");
     }
 
-    if (has_top_level_named_parameters) {
-        for (std::size_t i = 0; i < parameters.size(); ++i) {
-            const std::string parameter_name = "p" + std::to_string(i);
-            parameters[i] = input_json.at(parameter_name).get<double>();
-        }
-
-        return parameters;
+    if (has_named_parameter_set(input_json)) {
+        return parse_parameter_vector_from_object(input_json);
     }
 
     throw std::runtime_error(
         "Could not find evaluator parameters. Expected one of:\n"
         "  1. parameters: [15 values]\n"
         "  2. parameters: {p0, ..., p14}\n"
-        "  3. top-level keys p0, ..., p14");
+        "  3. params: {p0, ..., p14}\n"
+        "  4. top-level keys p0, ..., p14");
 }
 
 fs::path parse_mica_binary_file_path(
@@ -271,7 +294,7 @@ json build_success_output_json(const EvaluationMetrics& metrics)
     metrics_json["sample_count"] = metrics.sample_count;
 
     json output_json;
-    output_json["status"] = "success";
+    output_json["status"] = "ok";
     output_json["objective"] = metrics.sun_vector_error_arcsec.average;
     output_json["metrics"] = metrics_json;
 
@@ -281,8 +304,7 @@ json build_success_output_json(const EvaluationMetrics& metrics)
 json build_failure_output_json(const std::string& message)
 {
     json output_json;
-    output_json["status"] = "failure";
-    output_json["error_type"] = "runtime_error";
+    output_json["status"] = "failed";
     output_json["message"] = message;
     return output_json;
 }
